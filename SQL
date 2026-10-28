@@ -1,0 +1,219 @@
+-- TABELAS --
+
+create table aluno (
+    ra_aluno varchar2(8),
+    nm_aluno varchar2(80),
+    ds_curso varchar2(8),
+    constraint aluno_pk primary key (ra_aluno),
+    constraint aluno_nm_nn check(nm_aluno is not null)
+);
+
+create table evento(
+    nm_evento varchar2(80),
+    dt_inicio date,
+    dt_fim date,
+    constraint evento_pk primary key(nm_evento)
+);
+
+create table validador(
+    ds_validador varchar2(13),
+    nr_validador number(6),
+    dt date default sysdate,
+    constraint validador_pk primary key (ds_validador) 
+);
+create table frequencia(
+    ra_aluno varchar2(8),
+    dt_frequencia date default sysdate,
+    ds_validador varchar2(13),
+    nr_lat number(10,6),
+    nr_lon number(10,6),
+    constraint frequencia_pk primary key (ra_aluno,dt_frequencia,ds_validador),
+    constraint frequencia_fk_ra_aluno foreign key(ra_aluno) references aluno(ra_aluno),
+    constraint frequencia_fk_ds_validador foreign key(ds_validador) references validador(ds_validador)
+);
+
+create table artigo
+(
+    id_artigo number(4),
+    sg_orientador char(2),
+    sg_tipo char(3),
+    ds_titulo varchar2(120),
+    constraint artigo_uk unique (ds_titulo) 
+);
+
+alter table artigo add constraint artigo_pk primary key (id_artigo);
+
+create table avaliacao (
+    id_artigo number(4),
+    p1 number(1),
+    p2 number(1),
+    p3 number(1),
+    p4 number(1),
+    p5 number(1),
+    sg_avaliador varchar2(2),
+    dt date default sysdate,
+    constraint avaliacao_fk foreign key (id_artigo) references artigo (id_artigo)
+);
+
+-- SEQUENCIA --
+
+create sequence cont_validador start with 43690 increment by 1 maxvalue 999999;
+create sequence cont_artigo start with 4000 increment by 1 maxvalue 999999;
+
+update artigo set id_artigo = cont_artigo.nextval;
+select cont_artigo.nextval from dual;
+
+-- PROCEDURES --
+
+create or replace procedure proc_validador is
+    novo_validador varchar2(12);
+begin
+    dbms_output.enable;
+    novo_validador := ltrim(substr(to_char(cont_validador.nextval,'XXXX'),1,2)||to_char(sysdate,'yy')||substr(to_char(cont_validador.currval,'XXXX'),2,2)||to_char(sysdate,'mm')||substr(to_char(cont_validador.currval,'XXXX'),3,3)||to_char(sysdate,'dd'));
+    dbms_output.put_line(novo_validador);
+    insert into validador (ds_validador,nr_validador) values (novo_validador,cont_validador.currval);                
+end;
+
+begin
+    proc_validador;
+end;
+
+create or replace procedure gerar_validador 
+(
+    maximo in number
+) is
+begin
+    dbms_output.enable;
+    for contar in 1..maximo
+    loop
+       proc_validador;
+    end loop;
+    dbms_output.put_line('Numeros Gerados');
+end;
+
+begin
+   gerar_validador(10);
+end;
+
+create or replace procedure proc_avaliador is
+begin
+  update avaliacao set sg_avaliador = upper(sg_avaliador);
+end;
+
+begin
+    proc_avaliador;
+end;
+
+-- SELECT --
+
+select ra_aluno, to_char(dt_frequencia, 'dd/mm/yy hh:mm:ss'), ds_validador, nr_lat, nr_lon from frequencia;
+select substr(to_char(cont_validador.nextval,'XXXX'),1,2)||to_char(sysdate,'yyyy')||substr(to_char(cont_validador.currval,'XXXX'),2,1)||to_char(sysdate, 'mm')||substr(to_char(cont_validador.currval,'XXXX'),3,2)||to_char(sysdate,'dd') from dual;
+select to_char(43761,'XXXX') from dual;
+select * from validador;
+delete from validador;
+select * from evento;
+
+-- INSERT DE TESTE ---
+
+insert into evento values ('VII CATI FAM',to_date('08/11/2024','dd/mm/yyyy'),to_date('14/11/2024','dd/mm/yyyy'));
+insert into evento values ('CONTEEX 1º',to_date('26/05/2025','dd/mm/yyyy'),to_date('06/06/2025','dd/mm/yyyy'));
+insert into aluno values ('051507','Claudiney Sanches Júnior','CCOMP');
+
+-- LINKS --
+
+https://medium.com/@amodjjoshi/implementing-geolocation-maps-in-oracle-apex-f8b4e3512940
+https://www.youtube.com/watch?v=k2-8al0XFJ0
+GET GEO Location and Show Map in Oracle Apex
+https://github.com/jeffreykemp/jk64-plugin-reportmap
+
+References
+#WORKSPACE_FILES#IMPORT/ALUNOS_TI.xlsx
+
+Mine Type
+application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+
+#APP_FILES#IMPORT/ALUNOS_TI.xlsx
+application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+
+-- VIEW --
+
+create or replace view view_validador as
+select ds_validador as validador, to_char(dt,'dd/mm/yyyy') as dia from validador; 
+
+select * from view_validador where dia = '22/10/2024';
+
+create or replace view view_quantidade as
+select count(*) as quantidade, substr(sg_tipo,3,1) as Turno,  substr(sg_tipo,1,2) as Tipo from artigo group by substr(sg_tipo,3,1), substr(sg_tipo,1,2) order by  3 desc, 2;
+
+select * from view_quantidade;
+
+create or replace view view_Nota as
+select av.id_artigo as "Artigo", ar.ds_titulo as "Titulo",
+       --round(avg(p1)) as "Formatação", 
+       --round(avg(p2)) as "QR Code", 
+       --round(avg(p3)) as "Apresentação", 
+       --round(avg(p4)) as "Cliente Real", 
+       --round(avg(p5)) as "Viável",
+       to_char(round(avg(p1))*0.04+round(avg(p2))*0.2+round(avg(p3))*0.04+round(avg(p4))*0.04+round(avg(p5))*0.04,'0D00') as "Nota Final" 
+from avaliacao av
+join artigo ar
+on av.id_artigo = ar.id_artigo 
+group by av.id_artigo, ar.ds_titulo
+order by 3 desc;
+
+select * from view_Nota;
+
+create or replace view view_Avaliadores_Dia as
+select upper(sg_avaliador) as "Sigla", count(*) as "Quantidade", to_char(dt,'dd/mm/yy') as "Dia"
+from avaliacao
+group by upper(sg_avaliador), to_char(dt,'dd/mm/yy')
+order by 3;
+
+create or replace view view_Avaliadores as
+select upper(sg_avaliador) as "Sigla", count(*) as "Quantidade"
+from avaliacao
+group by upper(sg_avaliador)
+order by 1;
+
+-- contar todos os artigos
+--select count(*), substr(sg_tipo,3,1) as Turno from artigo group by substr(sg_tipo,3,1);
+
+-- Listar as Bancas os tipos Full Papper
+--select ds_titulo as Artigo, substr(sg_tipo,3,1) as Turno from artigo where substr(sg_tipo,1,2) = 'FP';
+
+-- Contar os Banner
+select count(*) as quantidade, substr(sg_tipo,3,1) as Turno from artigo where substr(sg_tipo,1,2) <> 'FP' group by substr(sg_tipo,3,1);
+
+
+select id_artigo as Codigo, ds_titulo as Titulo, substr(sg_tipo,3,1) as Turno from artigo where substr(sg_tipo,3,1) = 'M' and substr(sg_tipo,1,2) = 'FP' order by 1;
+
+select cont_artigo.nextval from dual
+
+SELECT 
+    ra_aluno, 
+    nm_aluno, 
+    nm_curso, 
+    ds_filial, 
+    SUM(quantidade) AS total 
+FROM (
+    -- Primeiro bloco: Frequência
+    SELECT ra_aluno, nm_aluno, nm_curso, ds_filial, COUNT(*)*3 AS quantidade 
+    FROM (
+        SELECT f.ra_aluno, al.nm_aluno, f.dt_frequencia, al.nm_curso, al.ds_filial 
+        FROM frequencia f 
+        JOIN aluno al ON al.ra_aluno = f.ra_aluno 
+    ) 
+    GROUP BY ra_aluno, nm_aluno, nm_curso, ds_filial
+
+    UNION ALL
+
+    -- Segundo bloco: Aula
+    SELECT ra_aluno, nm_aluno, nm_curso, ds_filial, COUNT(*)*3 AS quantidade 
+    FROM (
+        SELECT ra_aluno, nm_aluno, dt_frequencia, nm_curso, ds_filial 
+        FROM aula
+    ) 
+    GROUP BY ra_aluno, nm_aluno, nm_curso, ds_filial
+) dados_consolidados -- <--- Fechamos o parêntese principal e demos um apelido para a subquery
+GROUP BY ra_aluno, nm_aluno, nm_curso, ds_filial
+order by 4, 3, 2;
